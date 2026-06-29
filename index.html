@@ -18,14 +18,14 @@
     
     .popup-title { font-weight: bold; font-size: 14px; margin-bottom: 5px; }
 
-    /* 一覧パネルのデザイン */
+    /* ★★★ 変更：一覧パネルのデザイン（折りたたみ対応） ★★★ */
     #status-list-panel {
       position: absolute;
       top: 10px;
       right: 10px;
       z-index: 1000;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 10px;
+      background: rgba(255, 255, 255, 0.95); /* 少し白を濃くして見やすく */
+      padding: 8px;
       border-radius: 5px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.3);
       max-height: 80%;
@@ -33,18 +33,34 @@
       font-size: 12px;
       pointer-events: auto;
     }
-    #status-list-panel h3 { margin: 0 0 5px 0; font-size: 13px; text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
     
-    /* ★★★ 追加：更新時刻の文字デザイン ★★★ */
-    #update-time { display: block; text-align: center; font-size: 10px; color: #666; font-weight: normal; margin-bottom: 5px; }
+    /* 開閉用のボタンデザイン */
+    #toggle-btn {
+      background-color: #f8f9fa;
+      border: 1px solid #ccc;
+      padding: 6px 10px;
+      border-radius: 4px;
+      text-align: center;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 13px;
+      color: #333;
+    }
     
+    /* リストの中身（初期状態は隠しておく） */
+    #list-content {
+      display: none; 
+      margin-top: 10px;
+    }
+
+    #update-time { display: block; text-align: center; font-size: 10px; color: #666; font-weight: normal; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
     #status-list-panel table { width: 100%; border-collapse: collapse; }
     #status-list-panel td { padding: 4px 5px; border-bottom: 1px dashed #eee; vertical-align: middle; }
     
-    /* ステータスごとの文字色 */
     .status-text-blue { color: blue; font-weight: bold; }
     .status-text-orange { color: orange; font-weight: bold; }
     .status-text-red { color: red; font-weight: bold; }
+    .vacant-text { font-size: 10px; color: #555; margin-left: 5px; font-weight: normal; }
   </style>
 </head>
 <body>
@@ -52,10 +68,13 @@
   <div id="map-wrapper">
     <div id="map"></div>
     <div id="status-list-panel">
-      <h3>空き状況一覧</h3>
-      <span id="update-time">(--:-- 時点)</span>
-      <table id="status-table">
-        </table>
+      <div id="toggle-btn" onclick="toggleList()">📋 空き状況一覧を開く</div>
+      
+      <div id="list-content">
+        <span id="update-time">(--:-- 時点)</span>
+        <table id="status-table">
+          </table>
+      </div>
     </div>
   </div>
 
@@ -64,6 +83,7 @@
   </div>
 
   <script>
+    // 地図の初期設定
     var map = L.map('map').setView([34.295261575345286, 135.51751990257273], 15);
 
     L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
@@ -73,6 +93,21 @@
     // ★★★ ここにGASのURLを入れます ★★★
     var gasUrl = "https://script.google.com/macros/s/AKfycby31srJLpaJ8mVhonQMxIEQTQENDs-nYMBa9hNBoSV7uRjCF7n28CQOJu9YW14yFGGH/exec";
     var markers = [];
+
+    // ★★★ 追加：リストを開閉するプログラム ★★★
+    function toggleList() {
+      var content = document.getElementById('list-content');
+      var btn = document.getElementById('toggle-btn');
+      
+      // もし隠れていたら表示し、表示されていたら隠す
+      if (content.style.display === 'none' || content.style.display === '') {
+        content.style.display = 'block';
+        btn.innerText = '▼ 一覧を閉じる';
+      } else {
+        content.style.display = 'none';
+        btn.innerText = '📋 空き状況一覧を開く';
+      }
+    }
 
     function loadParkingData() {
       fetch(gasUrl)
@@ -133,16 +168,12 @@
             tableHtml += "<tr><td>" + park.name + "</td><td class='" + textClass + "'>" + listStatusText + "</td></tr>";
           });
 
-          // リストの流し込み
           document.getElementById('status-table').innerHTML = tableHtml;
 
-          // ★★★ 追加：現在時刻を取得して表示する処理 ★★★
           var now = new Date();
           var hours = String(now.getHours()).padStart(2, '0');
           var minutes = String(now.getMinutes()).padStart(2, '0');
-          var timeString = "(" + hours + ":" + minutes + " 時点)";
-          document.getElementById('update-time').innerText = timeString;
-
+          document.getElementById('update-time').innerText = "(" + hours + ":" + minutes + " 時点)";
         })
         .catch(error => console.error("通信エラー:", error));
     }
