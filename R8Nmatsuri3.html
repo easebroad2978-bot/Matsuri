@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>夏まつり駐車場 管理ダッシュボード</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    /* 画面分割のレイアウト */
+    body { margin: 0; padding: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    
+    #map-wrapper { position: relative; flex: 1; width: 100%; min-height: 45vh; }
+    #map { width: 100%; height: 100%; }
+    
+    #form-area { flex: 1; width: 100%; min-height: 55vh; border-top: 3px solid #333; }
+    iframe { width: 100%; height: 100%; border: none; }
+    
+    .popup-title { font-weight: bold; font-size: 14px; margin-bottom: 5px; }
+
+    /* 一覧パネルのデザイン */
+    #status-list-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      max-height: 80%;
+      overflow-y: auto;
+      font-size: 12px;
+      pointer-events: auto;
+    }
+    #status-list-panel h3 { margin: 0 0 5px 0; font-size: 13px; text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+    
+    /* ★★★ 追加：更新時刻の文字デザイン ★★★ */
+    #update-time { display: block; text-align: center; font-size: 10px; color: #666; font-weight: normal; margin-bottom: 5px; }
+    
+    #status-list-panel table { width: 100%; border-collapse: collapse; }
+    #status-list-panel td { padding: 4px 5px; border-bottom: 1px dashed #eee; vertical-align: middle; }
+    
+    /* ステータスごとの文字色 */
+    .status-text-blue { color: blue; font-weight: bold; }
+    .status-text-orange { color: orange; font-weight: bold; }
+    .status-text-red { color: red; font-weight: bold; }
+  </style>
+</head>
+<body>
+  
+  <div id="map-wrapper">
+    <div id="map"></div>
+    <div id="status-list-panel">
+      <h3>空き状況一覧</h3>
+      <span id="update-time">(--:-- 時点)</span>
+      <table id="status-table">
+        </table>
+    </div>
+  </div>
+
+  <div id="form-area">
+    <iframe src="https://forms.gle/JhWsFrFSXisuTKny9"></iframe>
+  </div>
+
+  <script>
+    var map = L.map('map').setView([34.295261575345286, 135.51751990257273], 15);
+
+    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+      attribution: "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>国土地理院</a>"
+    }).addTo(map);
+
+    // ★★★ ここにGASのURLを入れます ★★★
+    var gasUrl = "https://script.google.com/macros/s/AKfycby31srJLpaJ8mVhonQMxIEQTQENDs-nYMBa9hNBoSV7uRjCF7n28CQOJu9YW14yFGGH/exec";
+    var markers = [];
+
+    function loadParkingData() {
+      fetch(gasUrl)
+        .then(response => response.json())
+        .then(data => {
+          markers.forEach(marker => map.removeLayer(marker));
+          markers = [];
+
+          var tableHtml = "";
+
+          data.forEach(park => {
+            if (!park.lat || !park.lng || isNaN(park.lat) || isNaN(park.lng)) return;
+
+            var color = 'blue';
+            var currentStatus = "空きあり";
+            var capacity = Number(park.capacity);
+            var parked = Number(park.status);
+
+            if (!isNaN(capacity) && !isNaN(parked) && capacity > 0) {
+              var rate = parked / capacity;
+              if (rate >= 1.0) { color = 'red'; currentStatus = "満車"; }
+              else if (rate >= 0.7) { color = 'orange'; currentStatus = "混雑"; }
+              else if (parked === 0 && park.status !== 0 && park.status !== "0") { currentStatus = "未報告"; }
+            } else {
+              if (park.status === '満車') { color = 'red'; currentStatus = "満車"; }
+              else if (park.status === '混雑') { color = 'orange'; currentStatus = "混雑"; }
+              else if (park.status === 0 || park.status === "0" || park.status === "未報告") { currentStatus = "未報告"; }
+              else { currentStatus = park.status; }
+            }
+
+            var marker = L.circleMarker([park.lat, park.lng], {
+              color: color, fillColor: color, fillOpacity: 0.8, radius: 12
+            }).addTo(map);
+
+            var popupContent = "<div class='popup-title'>" + park.name + "</div>" +
+                               "現在の状況：<b>" + currentStatus + "</b><br>" +
+                               "駐車可能台数：" + park.capacity + "台<br>" +
+                               "現在の駐車： " + park.status + "台<br>" +
+                               "現在の空き： <b>" + park.vacant + "台</b>";
+
+            marker.bindPopup(popupContent);
+            markers.push(marker);
+
+            var textClass = 'status-text-blue';
+            if (color === 'red') textClass = 'status-text-red';
+            if (color === 'orange') textClass = 'status-text-orange';
+            
+            var listStatusText = currentStatus;
+            
+            if (currentStatus === "空きあり" && park.vacant !== "") {
+              listStatusText = "空" + park.vacant + "台";
+            } else if (currentStatus === "混雑" && park.vacant !== "") {
+              listStatusText = "混雑(空" + park.vacant + "台)";
+            } else if (currentStatus === "満車") {
+              listStatusText = "満車";
+            }
+            
+            tableHtml += "<tr><td>" + park.name + "</td><td class='" + textClass + "'>" + listStatusText + "</td></tr>";
+          });
+
+          // リストの流し込み
+          document.getElementById('status-table').innerHTML = tableHtml;
+
+          // ★★★ 追加：現在時刻を取得して表示する処理 ★★★
+          var now = new Date();
+          var hours = String(now.getHours()).padStart(2, '0');
+          var minutes = String(now.getMinutes()).padStart(2, '0');
+          var timeString = "(" + hours + ":" + minutes + " 時点)";
+          document.getElementById('update-time').innerText = timeString;
+
+        })
+        .catch(error => console.error("通信エラー:", error));
+    }
+
+    loadParkingData();
+    setInterval(loadParkingData, 60000);
+  </script>
+</body>
+</html>
