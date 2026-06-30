@@ -23,7 +23,7 @@
       position: absolute; top: 10px; right: 10px; z-index: 1000;
       background: rgba(255, 255, 255, 0.95); padding: 8px; border-radius: 5px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.3); max-height: 80%; overflow-y: auto;
-      font-size: 12px; pointer-events: auto;
+      font-size: 12px; pointer-events: auto; width: 180px; /* 横幅を少し安定させる */
     }
     
     /* ボタンのデザイン */
@@ -41,6 +41,13 @@
     #refresh-btn:active { background-color: #ced4da; }
     
     #list-content { display: none; margin-top: 10px; }
+    
+    /* ★★★ 追加：トータル表示のデザイン ★★★ */
+    #total-status {
+      display: block; text-align: center; font-size: 13px; font-weight: bold;
+      color: #000; background-color: #e2f0d9; padding: 5px; border-radius: 4px; margin-bottom: 5px;
+    }
+    
     #update-time { display: block; text-align: center; font-size: 10px; color: #666; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
     #status-list-panel table { width: 100%; border-collapse: collapse; }
     #status-list-panel td { padding: 4px 5px; border-bottom: 1px dashed #eee; vertical-align: middle; }
@@ -59,6 +66,7 @@
       <div id="refresh-btn" onclick="loadParkingData()">🔄 今すぐ更新</div>
       
       <div id="list-content">
+        <div id="total-status">全体：計算中...</div>
         <span id="update-time">(--:-- 時点)</span>
         <table id="status-table"></table>
       </div>
@@ -76,7 +84,7 @@
       attribution: "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>国土地理院</a>"
     }).addTo(map);
 
-    // ★ GASのURLを組み込み済み
+    // GASのURLを組み込み済み
     var gasUrl = "https://script.google.com/macros/s/AKfycby31srJLpaJ8mVhonQMxIEQTQENDs-nYMBa9hNBoSV7uRjCF7n28CQOJu9YW14yFGGH/exec";
     var markers = [];
 
@@ -93,11 +101,9 @@
     }
 
     function loadParkingData() {
-      // 視覚的フィードバック：押した瞬間に文字を変える
       var btn = document.getElementById('refresh-btn');
       if (btn) btn.innerText = "🔄 更新中...";
 
-      // URLの末尾にタイムスタンプを付与し、ブラウザのキャッシュを強制的に回避する
       var fetchUrl = gasUrl + (gasUrl.indexOf('?') > -1 ? '&' : '?') + '_=' + new Date().getTime();
 
       fetch(fetchUrl)
@@ -109,6 +115,10 @@
           markers.forEach(marker => map.removeLayer(marker));
           markers = [];
           var tableHtml = "";
+
+          // ★★★ 追加：トータル集計用の変数 ★★★
+          var totalCapacity = 0;
+          var totalVacant = 0;
 
           data.forEach(park => {
             if (!park.lat || !park.lng || isNaN(park.lat) || isNaN(park.lng)) return;
@@ -125,10 +135,18 @@
               currentStatus = "未入力";
               listStatusText = "<span style='color:gray; font-weight:normal;'>未入力</span>";
               textClass = '';
+              
+              // 未入力の駐車場は、可能台数すべてが「空き」の状態としてトータルに加算
+              totalCapacity += capacity;
+              totalVacant += capacity;
             } else {
               var parked = Number(parkedRaw);
               var rate = parked / capacity;
               
+              // トータル計算用に加算
+              totalCapacity += capacity;
+              totalVacant += Number(park.vacant);
+
               if (rate >= 1.0) {
                 color = 'red';
                 currentStatus = "満車";
@@ -166,14 +184,17 @@
             tableHtml += "<tr><td>" + park.name + "</td><td class='" + textClass + "'>" + listStatusText + "</td></tr>";
           });
 
+          // 各駐車場のリストを流し込み
           document.getElementById('status-table').innerHTML = tableHtml;
+
+          // ★★★ 追加：集計したトータル値を画面に反映 ★★★
+          document.getElementById('total-status').innerHTML = "全体：空" + totalVacant + "台 / " + totalCapacity + "台";
 
           var now = new Date();
           var hours = String(now.getHours()).padStart(2, '0');
           var minutes = String(now.getMinutes()).padStart(2, '0');
           document.getElementById('update-time').innerText = "(" + hours + ":" + minutes + " 時点)";
           
-          // 元の文字に戻す
           if (btn) btn.innerText = "🔄 今すぐ更新";
         })
         .catch(error => {
