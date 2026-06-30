@@ -23,7 +23,7 @@
       position: absolute; top: 10px; right: 10px; z-index: 1000;
       background: rgba(255, 255, 255, 0.95); padding: 8px; border-radius: 5px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.3); max-height: 80%; overflow-y: auto;
-      font-size: 12px; pointer-events: auto; width: 180px; /* 横幅を少し安定させる */
+      font-size: 12px; pointer-events: auto; width: 190px;
     }
     
     /* ボタンのデザイン */
@@ -42,9 +42,9 @@
     
     #list-content { display: none; margin-top: 10px; }
     
-    /* ★★★ 追加：トータル表示のデザイン ★★★ */
+    /* トータル表示のデザイン */
     #total-status {
-      display: block; text-align: center; font-size: 13px; font-weight: bold;
+      display: block; text-align: center; font-size: 12px; font-weight: bold;
       color: #000; background-color: #e2f0d9; padding: 5px; border-radius: 4px; margin-bottom: 5px;
     }
     
@@ -84,7 +84,7 @@
       attribution: "<a href='https://maps.gsi.go.jp/development/ichiran.html' target='_blank'>国土地理院</a>"
     }).addTo(map);
 
-    // GASのURLを組み込み済み
+    // GASのURL
     var gasUrl = "https://script.google.com/macros/s/AKfycby31srJLpaJ8mVhonQMxIEQTQENDs-nYMBa9hNBoSV7uRjCF7n28CQOJu9YW14yFGGH/exec";
     var markers = [];
 
@@ -116,7 +116,6 @@
           markers = [];
           var tableHtml = "";
 
-          // ★★★ 追加：トータル集計用の変数 ★★★
           var totalCapacity = 0;
           var totalVacant = 0;
 
@@ -136,14 +135,12 @@
               listStatusText = "<span style='color:gray; font-weight:normal;'>未入力</span>";
               textClass = '';
               
-              // 未入力の駐車場は、可能台数すべてが「空き」の状態としてトータルに加算
               totalCapacity += capacity;
               totalVacant += capacity;
             } else {
               var parked = Number(parkedRaw);
               var rate = parked / capacity;
               
-              // トータル計算用に加算
               totalCapacity += capacity;
               totalVacant += Number(park.vacant);
 
@@ -184,11 +181,15 @@
             tableHtml += "<tr><td>" + park.name + "</td><td class='" + textClass + "'>" + listStatusText + "</td></tr>";
           });
 
-          // 各駐車場のリストを流し込み
           document.getElementById('status-table').innerHTML = tableHtml;
 
-          // ★★★ 追加：集計したトータル値を画面に反映 ★★★
-          document.getElementById('total-status').innerHTML = "全体：空" + totalVacant + "台 / " + totalCapacity + "台";
+          // ★★★ 追加・変更：パーセンテージの計算と画面への反映 ★★★
+          var percent = 0;
+          if (totalCapacity > 0) {
+            // 全体の空き台数 ÷ 全体の可能台数 × 100 でパーセントを出し、四捨五入する
+            percent = Math.round((totalVacant / totalCapacity) * 100);
+          }
+          document.getElementById('total-status').innerHTML = "全体：空" + totalVacant + "台 / " + totalCapacity + "台 (空き" + percent + "%)";
 
           var now = new Date();
           var hours = String(now.getHours()).padStart(2, '0');
